@@ -19,7 +19,6 @@ class QNetwork(nn.Module):
         return self.layer3(x)
 
 
-
 class DQNAgent:
     def __init__(self, state_size, action_size):
         self.state_size = state_size

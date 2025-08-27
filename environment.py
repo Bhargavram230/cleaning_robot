@@ -11,23 +11,22 @@ class CleaningEnv:
         self.robot = Robot(self.grid_size, size=3)
         self.renderer = PygameRenderer(self.grid_size)
         
-        # --- UPDATED: Action space is now 4 ---
         self.action_space = 4
         self.grid = None
         self.dust_count = 0
-        self.obstacles = []
-        self.dust_patches = []
+        
+        # --- NEW: Define rewards as configurable attributes ---
+        self.reward_finished = 100.0
+        self.reward_crash = -100.0
+        self.reward_clean = 10.0
+        self.reward_time_step = -0.1
 
     def reset(self):
         self.grid = np.zeros((self.grid_size, self.grid_size), dtype=np.int8)
         self.robot.reset()
         
-        self.obstacles.clear()
-        self.dust_patches.clear()
-        
         self._place_random_objects(object_type='obstacle', min_size=3, max_size=8, count=7)
-        initial_dust_patches = 15
-        self._place_random_objects(object_type='dust', min_size=2, max_size=4, count=initial_dust_patches)
+        self._place_random_objects(object_type='dust', min_size=2, max_size=4, count=15)
         self.dust_count = np.sum(self.grid == 2)
 
         robot_pos_normalized = np.array(self.robot.pos) / self.grid_size
@@ -43,52 +42,49 @@ class CleaningEnv:
                 x = random.randint(0, self.grid_size - width)
                 y = random.randint(0, self.grid_size - height)
 
-                robot_start_coords = self.robot.get_body_coords()
-                
-                is_overlapping = False
-                for r_start, c_start in robot_start_coords:
-                    if y <= r_start < y + height and x <= c_start < x + width:
-                        is_overlapping = True
-                        break
-                
-                if not is_overlapping and np.sum(self.grid[y:y+height, x:x+width]) == 0:
+                if np.sum(self.grid[y:y+height, x:x+width]) == 0:
                     self.grid[y:y+height, x:x+width] = grid_value
-                    obj_info = {'x': x, 'y': y, 'width': width, 'height': height}
-                    if object_type == 'obstacle': self.obstacles.append(obj_info)
-                    else: self.dust_patches.append(obj_info)
                     break
     
     def step(self, action):
-        done = False
-        # --- UPDATED: Robot always moves based on the action ---
         self.robot.move(action)
         
-        reward = -0.1
+        # Start with a small time penalty for every action
+        reward = self.reward_time_step
+        done = False
         
+        # --- UPDATED: Explicit flags for success and failure ---
+        
+        # Get coordinates and tiles under the robot's body
         body_coords = self.robot.get_body_coords()
         rows = np.array([coord[0] for coord in body_coords])
         cols = np.array([coord[1] for coord in body_coords])
         tiles_under_robot = self.grid[rows, cols]
         
+        # 1. Check for FAILURE state (collision)
         if np.any(tiles_under_robot == 1):
-            reward = -100
+            reward = self.reward_crash # Assign failure reward
             done = True
         
-        if not done:
+        # 2. If not failed, perform actions and check for SUCCESS
+        else:
+            # Clean dust automatically
             dust_mask = (tiles_under_robot == 2)
             num_dust_cleaned = np.sum(dust_mask)
             
             if num_dust_cleaned > 0:
-                reward += 10 * num_dust_cleaned 
+                reward += self.reward_clean * num_dust_cleaned 
                 cleaned_rows = rows[dust_mask]
                 cleaned_cols = cols[dust_mask]
                 self.grid[cleaned_rows, cleaned_cols] = 0
                 self.dust_count -= num_dust_cleaned
 
-        if self.dust_count <= 0:
-            done = True
-            reward += 100
+            # Check for SUCCESS state (all dust cleaned)
+            if self.dust_count <= 0:
+                reward = self.reward_finished # Assign success reward
+                done = True
 
+        # Construct the next state for the agent
         robot_pos_normalized = np.array(self.robot.pos) / self.grid_size
         next_state = np.concatenate([self.grid.flatten(), robot_pos_normalized])
 

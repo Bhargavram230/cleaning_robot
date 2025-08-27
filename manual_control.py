@@ -1,5 +1,4 @@
 # main.py
-
 import pygame
 import sys
 

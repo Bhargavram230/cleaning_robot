@@ -4,7 +4,6 @@ import random
 import pygame
 from robot import Robot
 from simulation import PygameRenderer
-
 class CleaningEnv:
     def __init__(self, grid_size=50):
         self.grid_size = grid_size
@@ -18,7 +17,6 @@ class CleaningEnv:
         self.dust_patches = []
 
     def reset(self):
-        """Resets the environment. The logic here is mostly the same."""
         self.grid = np.zeros((self.grid_size, self.grid_size), dtype=np.int8)
         self.robot.reset()
         
@@ -29,15 +27,11 @@ class CleaningEnv:
         self.dust_count = 15
         self._place_random_objects(object_type='dust', min_size=2, max_size=4, count=self.dust_count)
         
-        # The state is the grid plus the robot's normalized position
         robot_pos_normalized = np.array(self.robot.pos) / self.grid_size
-        # The state is now a combination of the map and the robot's own position
         state = np.concatenate([self.grid.flatten(), robot_pos_normalized])
         return state
 
     def _place_random_objects(self, object_type, min_size, max_size, count):
-        # This function is part of the setup, so it doesn't need to be highly optimized.
-        # The original logic is kept for simplicity.
         grid_value = 1 if object_type == 'obstacle' else 2
         for _ in range(count):
             while True:
@@ -62,48 +56,49 @@ class CleaningEnv:
                     break
     
     def step(self, action):
-        """
-        This method is now vectorized for performance.
-        """
         done = False
-        # Move the robot first
+        # Action 4 is now a "stay" action, actions 0-3 are movement
         if action < 4:
             self.robot.move(action)
         
-        reward = 0
+        # Start with a small time penalty for every action taken
+        reward = -0.1
         
-        # --- VECTORIZED COLLISION CHECK ---
-        # 1. Get all coordinates the robot body occupies
+        # Get coordinates and tiles under the robot's body
         body_coords = self.robot.get_body_coords()
         rows = np.array([coord[0] for coord in body_coords])
         cols = np.array([coord[1] for coord in body_coords])
-
-        # 2. Use NumPy's advanced indexing to get all grid values under the robot at once
         tiles_under_robot = self.grid[rows, cols]
         
-        # 3. Check if any of those tiles is an obstacle (value 1)
+        # 1. Check for collision with an obstacle
         if np.any(tiles_under_robot == 1):
-            reward = -100
+            reward = -100 # Overwrite the small penalty with a large one
             done = True
         
+        # 2. If no collision, check for and clean dust AUTOMATICALLY
         if not done:
-            if action == 4: # Suck Dust action
-                center_r, center_c = self.robot.pos
-                if self.grid[center_r, center_c] == 2: # Check for dust at the center
-                    reward = 20
-                    self.dust_count -= 1
-                    self.grid[center_r, center_c] = 0 # Remove dust from the grid
-                else:
-                    reward = -1 # Penalty for sucking on an empty spot
-            else:
-                reward = -0.1 # Small penalty for moving to encourage efficiency
-        
-        # Check if the cleaning is finished
+            # Find which of the tiles under the robot are dust (value 2)
+            dust_mask = (tiles_under_robot == 2)
+            num_dust_cleaned = np.sum(dust_mask)
+            
+            if num_dust_cleaned > 0:
+                # Add a positive reward proportional to how much was cleaned
+                reward += 10 * num_dust_cleaned 
+                
+                # Get the actual grid coordinates of the cleaned dust
+                cleaned_rows = rows[dust_mask]
+                cleaned_cols = cols[dust_mask]
+                
+                # Set those grid cells to 0 (empty)
+                self.grid[cleaned_rows, cleaned_cols] = 0
+                self.dust_count -= num_dust_cleaned
+
+        # 3. Check if the episode is finished
         if self.dust_count == 0:
             done = True
             reward += 100
 
-        # Construct the next state
+        # 4. Construct the next state for the agent
         robot_pos_normalized = np.array(self.robot.pos) / self.grid_size
         next_state = np.concatenate([self.grid.flatten(), robot_pos_normalized])
 
@@ -114,6 +109,7 @@ class CleaningEnv:
 
     def close(self):
         self.renderer.close()
+
 
 # --- Example Usage (main.py) ---
 if __name__ == '__main__':

@@ -1,10 +1,12 @@
+# robot.py
+
 class Robot:
     def __init__(self, grid_size, size=3):
         self.grid_size = grid_size
         self.size = size
-        self.radius = self.size // 2 # Integer division, gives 1 for size 3
+        self.radius = self.size // 2 # For a 3x3 robot, radius is 1
         
-        # Start position is now offset to ensure the whole body is on the grid
+        # CORRECTED: The bottom-left-most valid center position
         self.start_pos = [self.grid_size - 1 - self.radius, self.radius]
         self.pos = list(self.start_pos)
 
@@ -14,7 +16,6 @@ class Robot:
 
     def move(self, action):
         """Updates the robot's center position based on an action."""
-        # Ensure the robot's center doesn't move too close to the edge
         min_coord = self.radius
         max_coord = self.grid_size - 1 - self.radius
         
@@ -28,7 +29,7 @@ class Robot:
             self.pos[1] = min(max_coord, self.pos[1] + 1)
 
     def get_body_coords(self):
-        """Gets the coordinates of all 9 cells occupied by the robot."""
+        """Gets the coordinates of all cells occupied by the robot."""
         center_r, center_c = self.pos
         coords = []
         for r in range(center_r - self.radius, center_r + self.radius + 1):

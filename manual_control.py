@@ -8,7 +8,7 @@ from environment import CleaningEnv
 
 def manual_control():
     """
-    Initializes the environment and runs the main loop for manual control.
+    Initializes the environment and runs a single episode for manual control.
     """
     env = CleaningEnv(grid_size=50)
     state = env.reset()
@@ -33,8 +33,6 @@ def manual_control():
                     action = 2 # Left
                 elif event.key == pygame.K_d:
                     action = 3 # Right
-                elif event.key == pygame.K_SPACE:
-                    action = 4 # Stay / "Suck" action
                 elif event.key == pygame.K_ESCAPE:
                     running = False
 
@@ -43,15 +41,17 @@ def manual_control():
             next_state, reward, done = env.step(action)
             print(f"Action: {action}, Reward: {reward:.1f}, Done: {done}")
             
-            # If the episode is over, reset the environment
+            # --- UPDATED LOGIC ---
+            # If the episode is over, end the game.
             if done:
-                print("Episode finished! Resetting...")
+                print("Episode finished!")
                 env.render()
-                pygame.time.wait(1000) # Pause for 1 second
-                state = env.reset()
+                pygame.time.wait(2000) # Pause for 2 seconds to show the final state
+                running = False # This will stop the main loop
 
         # Render the current state of the environment
-        env.render()
+        if running:
+            env.render()
         
         # Control the frame rate
         clock.tick(30)

@@ -7,9 +7,7 @@ import sys
 from environment import CleaningEnv
 
 def manual_control():
-    """
-    Initializes the environment and runs a single episode for manual control.
-    """
+
     env = CleaningEnv(grid_size=50)
     state = env.reset()
     
